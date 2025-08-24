@@ -60,7 +60,7 @@ const AnimalTable = ({ animals }: AnimalTableProps) => {
               Animal
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Category
+              Species
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
               Health Status
@@ -72,7 +72,7 @@ const AnimalTable = ({ animals }: AnimalTableProps) => {
               Last Checkup
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Weight
+              Caretaker
             </th>
             <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
               Actions
@@ -123,14 +123,10 @@ const AnimalTable = ({ animals }: AnimalTableProps) => {
                   </div>
                 </td>
 
-                {/* Category */}
+                {/* Species */}
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(
-                      animal.category
-                    )}`}
-                  >
-                    {animal.category}
+                  <span className="text-sm text-gray-900">
+                    {species || "Unknown Species"}
                   </span>
                 </td>
 
@@ -179,9 +175,11 @@ const AnimalTable = ({ animals }: AnimalTableProps) => {
                   </div>
                 </td>
 
-                {/* Weight */}
+                {/* Caretaker */}
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  N/A
+                  {typeof animal.caretakerId === "object"
+                    ? animal.caretakerId.name
+                    : "Unassigned"}
                 </td>
 
                 {/* Actions */}

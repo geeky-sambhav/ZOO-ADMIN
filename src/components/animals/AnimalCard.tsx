@@ -92,12 +92,8 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
               </h3>
               <p className="text-sm text-gray-600">{species}</p>
             </div>
-            <span
-              className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(
-                animal.category
-              )}`}
-            >
-              {animal.category}
+            <span className="px-2 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-600">
+              {species || "Unknown Species"}
             </span>
           </div>
 
@@ -117,7 +113,11 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
 
             <div className="flex items-center text-sm text-gray-600">
               <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
-              <span>Enclosure {animal.enclosureId}</span>
+              <span>
+                {typeof animal.enclosureId === "object"
+                  ? animal.enclosureId.name
+                  : `Enclosure ${animal.enclosureId}`}
+              </span>
             </div>
 
             {animal.lastCheckup && (
@@ -137,6 +137,18 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
                 {formatDistanceToNow(animal.arrivalDate, { addSuffix: true })}
               </span>
             </div>
+
+            {animal.caretakerId && (
+              <div className="flex items-center text-sm text-gray-600">
+                <User className="h-4 w-4 mr-2 flex-shrink-0" />
+                <span>
+                  Caretaker:{" "}
+                  {typeof animal.caretakerId === "object"
+                    ? animal.caretakerId.name
+                    : "Assigned"}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Description */}

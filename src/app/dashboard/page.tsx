@@ -32,7 +32,7 @@ export default function DashboardPage() {
               {getGreeting()}, {user?.name}!
             </h1>
             <p className="text-gray-600 mt-1">
-              Welcome to your {user?.role} dashboard. Here's what's happening at
+              Welcome to your {user?.role} dashboard. Here&apos;s what&apos;s happening at
               the zoo today.
             </p>
           </div>
@@ -65,15 +65,12 @@ export default function DashboardPage() {
         {/* Left Column - 2/3 width */}
         <div className="lg:col-span-2 space-y-6">
           <QuickActions userRole={user?.role || "caretaker"} />
-          <RecentActivity userRole={user?.role || "caretaker"} />
+         
         </div>
 
         {/* Right Column - 1/3 width */}
         <div className="space-y-6">
-          <UpcomingTasks userRole={user?.role || "caretaker"} />
-          {(user?.role === "admin" || user?.role === "doctor") && (
-            <HealthAlerts />
-          )}
+         
           <InventoryAlerts />
         </div>
       </div>

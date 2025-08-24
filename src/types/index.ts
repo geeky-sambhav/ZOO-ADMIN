@@ -31,19 +31,19 @@ export interface Animal {
   id?: string;
   name: string;
   species?: string;
-  speciesId?: string | Species;
-  category?: AnimalCategory;
+  speciesId: string | Species;
+  category?: AnimalCategory; // Keep for frontend filtering compatibility
   dob: Date;
-  sex: "male" | "female";
-  status: HealthStatus;
+  sex: "Male" | "Female" | "Unknown";
+  status: "Healthy" | "Sick" | "Deceased";
   enclosureId: string | Enclosure;
-  imgUrl?: string;
-  images?: string[];
+  imgUrl: string; // Required field
+  images?: string[]; // Keep for backward compatibility
   info?: string;
-  description?: string;
+  description?: string; // Keep for backward compatibility
   arrivalDate: Date;
   lastCheckup?: Date;
-  caretakerId?: string | User;
+  caretakerId: string | User;
   doctorId?: string;
   createdAt?: Date;
   updatedAt?: Date;

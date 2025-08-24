@@ -56,14 +56,7 @@ const QuickActions = ({ userRole }: QuickActionsProps) => {
           color: "text-orange-600",
           bgColor: "bg-orange-50 hover:bg-orange-100",
         },
-        {
-          name: "Generate Report",
-          description: "Create system reports",
-          icon: FileText,
-          href: "/dashboard/reports",
-          color: "text-purple-600",
-          bgColor: "bg-purple-50 hover:bg-purple-100",
-        },
+       
         {
           name: "Schedule Feeding",
           description: "Plan feeding schedules",

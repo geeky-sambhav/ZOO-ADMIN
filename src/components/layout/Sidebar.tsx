@@ -63,42 +63,17 @@ const Sidebar = () => {
       icon: Calendar,
       roles: ["admin", "caretaker"],
     },
-    {
-      name: "Health Monitoring",
-      href: "/dashboard/health",
-      icon: Heart,
-      roles: ["admin", "doctor"],
-    },
-    {
-      name: "Reports",
-      href: "/dashboard/reports",
-      icon: FileText,
-      roles: ["admin"],
-    },
-    {
-      name: "Analytics",
-      href: "/dashboard/analytics",
-      icon: BarChart3,
-      roles: ["admin"],
-    },
+    
+    
+    
     {
       name: "Notifications",
       href: "/dashboard/notifications",
       icon: Bell,
       roles: ["admin", "doctor", "caretaker"],
     },
-    {
-      name: "Audit Logs",
-      href: "/dashboard/audit",
-      icon: Shield,
-      roles: ["admin"],
-    },
-    {
-      name: "Settings",
-      href: "/dashboard/settings",
-      icon: Settings,
-      roles: ["admin", "doctor", "caretaker"],
-    },
+    
+   
   ];
 
   const filteredNavigation = navigation.filter((item) =>

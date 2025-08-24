@@ -1,9 +1,24 @@
-import { Animal, AnimalResponse } from "@/types";
+import { Species } from "@/types";
 import API_CONFIG from "@/utils/config";
 
 const API_BASE_URL = API_CONFIG.BASE_URL;
 
-class AnimalService {
+export interface SpeciesResponse {
+  message: string;
+  success?: boolean;
+  species?: Species[];
+  count?: number;
+  error?: string;
+}
+
+export interface SingleSpeciesResponse {
+  message: string;
+  success?: boolean;
+  species?: Species;
+  error?: string;
+}
+
+class SpeciesService {
   private async makeRequest<T>(
     endpoint: string,
     options: RequestInit = {}
@@ -15,7 +30,7 @@ class AnimalService {
         "Content-Type": "application/json",
         ...options.headers,
       },
-      credentials: "include", // Add this line to send cookies
+      credentials: "include",
       ...options,
     });
 
@@ -29,87 +44,73 @@ class AnimalService {
     return response.json();
   }
 
-  async getAllAnimals(): Promise<AnimalResponse> {
+  async getAllSpecies(): Promise<SpeciesResponse> {
     const response = await this.makeRequest<{
       message: string;
-      animals: Animal[];
       count: number;
-    }>("/api/animals");
+      species: Species[];
+    }>("/api/species");
 
-    // Transform to match expected AnimalResponse format
     return {
       message: response.message,
       success: true,
-      animals: response.animals,
+      species: response.species,
       count: response.count,
     };
   }
 
-  async getAnimal(id: string): Promise<AnimalResponse> {
+  async getSpecies(id: string): Promise<SingleSpeciesResponse> {
     const response = await this.makeRequest<{
       message: string;
-      animal: Animal;
-    }>(`/api/animals/${id}`);
+      species: Species;
+    }>(`/api/species/${id}`);
 
-    // Transform to match expected AnimalResponse format
     return {
       message: response.message,
       success: true,
-      animal: response.animal,
+      species: response.species,
     };
   }
 
-  async addAnimal(
-    animalData: Omit<Animal, "_id" | "id" | "createdAt" | "updatedAt">
-  ): Promise<AnimalResponse> {
+  async addSpecies(
+    speciesData: Omit<Species, "_id" | "createdAt" | "updatedAt">
+  ): Promise<SingleSpeciesResponse> {
     const response = await this.makeRequest<{
       message: string;
       success: boolean;
-      animal: Animal;
-    }>("/api/animals", {
+      species: Species;
+    }>("/api/species", {
       method: "POST",
-      body: JSON.stringify(animalData),
+      body: JSON.stringify(speciesData),
     });
 
     return {
       message: response.message,
       success: response.success,
-      animal: response.animal,
+      species: response.species,
     };
   }
 
-  async updateAnimal(
+  async updateSpecies(
     id: string,
-    animalData: Partial<Animal>
-  ): Promise<AnimalResponse> {
+    speciesData: Partial<Species>
+  ): Promise<SingleSpeciesResponse> {
     const response = await this.makeRequest<{
       message: string;
-      animal: Animal;
-    }>(`/api/animals/${id}`, {
+      success: boolean;
+      species: Species;
+    }>(`/api/species/${id}`, {
       method: "PUT",
-      body: JSON.stringify(animalData),
+      body: JSON.stringify(speciesData),
     });
 
     return {
       message: response.message,
-      success: true,
-      animal: response.animal,
-    };
-  }
-
-  async deleteAnimal(id: string): Promise<AnimalResponse> {
-    const response = await this.makeRequest<{
-      message: string;
-    }>(`/api/animals/${id}`, {
-      method: "DELETE",
-    });
-
-    return {
-      message: response.message,
-      success: true,
+      success: response.success,
+      species: response.species,
     };
   }
 }
 
-export const animalService = new AnimalService();
-export default animalService;
+export const speciesService = new SpeciesService();
+export default speciesService;
