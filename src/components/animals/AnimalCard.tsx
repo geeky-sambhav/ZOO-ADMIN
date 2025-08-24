@@ -10,7 +10,7 @@ interface AnimalCardProps {
 }
 
 const AnimalCard = ({ animal }: AnimalCardProps) => {
-  const getHealthStatusColor = (status: Animal["healthStatus"]) => {
+  const getHealthStatusColor = (status: Animal["status"]) => {
     switch (status) {
       case "healthy":
         return "text-green-600 bg-green-50 border-green-200";
@@ -46,14 +46,21 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
     }
   };
 
+  const animalId = animal._id || animal.id;
+  const species =
+    typeof animal.speciesId === "object"
+      ? animal.speciesId?.commonName
+      : animal.species;
+  const imageUrl = animal.imgUrl || (animal.images && animal.images[0]);
+
   return (
-    <Link href={`/dashboard/animals/${animal.id}`}>
+    <Link href={`/dashboard/animals/${animalId}`}>
       <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition-all duration-200 hover:border-blue-300 group">
         {/* Image */}
         <div className="aspect-w-16 aspect-h-9 bg-gray-100 relative">
-          {animal.images && animal.images.length > 0 ? (
+          {imageUrl ? (
             <img
-              src={animal.images[0]}
+              src={imageUrl}
               alt={animal.name}
               className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-200"
             />
@@ -67,10 +74,10 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
           <div className="absolute top-3 right-3">
             <span
               className={`px-2 py-1 text-xs font-medium rounded-full border ${getHealthStatusColor(
-                animal.healthStatus
+                animal.status
               )}`}
             >
-              {animal.healthStatus}
+              {animal.status}
             </span>
           </div>
         </div>
@@ -83,7 +90,7 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
               <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-600 transition-colors">
                 {animal.name}
               </h3>
-              <p className="text-sm text-gray-600">{animal.species}</p>
+              <p className="text-sm text-gray-600">{species}</p>
             </div>
             <span
               className={`px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(
@@ -99,7 +106,12 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
             <div className="flex items-center text-sm text-gray-600">
               <User className="h-4 w-4 mr-2 flex-shrink-0" />
               <span>
-                {animal.gender} • {animal.age} years old
+                {animal.sex} •{" "}
+                {animal.dob
+                  ? new Date().getFullYear() -
+                    new Date(animal.dob).getFullYear()
+                  : "Unknown"}{" "}
+                years old
               </span>
             </div>
 
@@ -128,9 +140,9 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
           </div>
 
           {/* Description */}
-          {animal.description && (
+          {(animal.info || animal.description) && (
             <p className="mt-3 text-sm text-gray-600 line-clamp-2">
-              {animal.description}
+              {animal.info || animal.description}
             </p>
           )}
 
@@ -138,21 +150,21 @@ const AnimalCard = ({ animal }: AnimalCardProps) => {
           <div className="mt-4 pt-3 border-t border-gray-200">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-gray-900">
-                {animal.weight} kg
+                {/* Weight not available in API, could be added later */}
+                {animal.sex}
               </span>
               <div className="flex items-center space-x-1">
                 <Heart
                   className={`h-4 w-4 ${
-                    animal.healthStatus === "healthy"
+                    animal.status === "healthy"
                       ? "text-green-500"
-                      : animal.healthStatus === "sick" ||
-                        animal.healthStatus === "injured"
+                      : animal.status === "sick" || animal.status === "injured"
                       ? "text-red-500"
                       : "text-yellow-500"
                   }`}
                 />
                 <span className="text-xs text-gray-500 capitalize">
-                  {animal.healthStatus}
+                  {animal.status}
                 </span>
               </div>
             </div>

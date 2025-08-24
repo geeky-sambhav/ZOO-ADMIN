@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
-import { MedicalRecord } from "@/types";
+import { MedicalRecord, MedicalRecordType } from "@/types";
+import MedicalRecordCard from "@/components/medical/MedicalRecordCard";
 import {
   Plus,
   Search,
@@ -12,19 +13,35 @@ import {
   Calendar,
   FileText,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import Link from "next/link";
-import { formatDistanceToNow } from "date-fns";
 
 export default function MedicalRecordsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [typeFilter, setTypeFilter] = useState<MedicalRecord["type"] | "all">(
+  const [typeFilter, setTypeFilter] = useState<MedicalRecordType | "all">(
     "all"
   );
   const [showFilters, setShowFilters] = useState(false);
 
-  const { medicalRecords, animals } = useDataStore();
+  const {
+    medicalRecords,
+    animals,
+    fetchMedicalRecords,
+    fetchAnimals,
+    medicalRecordsLoading,
+    medicalRecordsError,
+    deleteMedicalRecord,
+  } = useDataStore();
   const { hasPermission } = useAuthStore();
+
+  // Fetch data on component mount
+  useEffect(() => {
+    fetchMedicalRecords();
+    if (animals.length === 0) {
+      fetchAnimals();
+    }
+  }, [fetchMedicalRecords, fetchAnimals, animals.length]);
 
   // Redirect if user doesn't have permission
   if (!hasPermission(["admin", "doctor"])) {
@@ -45,9 +62,20 @@ export default function MedicalRecordsPage() {
 
   // Filter medical records
   const filteredRecords = medicalRecords.filter((record) => {
-    const animal = animals.find((a) => a.id === record.animalId);
+    const animalId =
+      typeof record.animalId === "string"
+        ? record.animalId
+        : record.animalId._id || record.animalId.id;
+    const animal =
+      animals.find((a) => (a._id || a.id) === animalId) ||
+      (typeof record.animalId === "object" ? record.animalId : null);
+
+    const animalName =
+      animal?.name ||
+      (typeof record.animalId === "object" ? record.animalId.name : "");
+
     const matchesSearch =
-      animal?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      animalName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.diagnosis?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       record.treatment?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = typeFilter === "all" || record.type === typeFilter;
@@ -55,7 +83,7 @@ export default function MedicalRecordsPage() {
     return matchesSearch && matchesType;
   });
 
-  const recordTypes: (MedicalRecord["type"] | "all")[] = [
+  const recordTypes: (MedicalRecordType | "all")[] = [
     "all",
     "checkup",
     "vaccination",
@@ -63,6 +91,22 @@ export default function MedicalRecordsPage() {
     "surgery",
     "emergency",
   ];
+
+  const handleRefresh = () => {
+    fetchMedicalRecords();
+  };
+
+  const handleDeleteRecord = async (record: MedicalRecord) => {
+    if (
+      window.confirm("Are you sure you want to delete this medical record?")
+    ) {
+      try {
+        await deleteMedicalRecord(record._id || record.id || "");
+      } catch (error) {
+        console.error("Failed to delete medical record:", error);
+      }
+    }
+  };
 
   const getTypeColor = (type: MedicalRecord["type"]) => {
     switch (type) {
@@ -120,16 +164,40 @@ export default function MedicalRecordsPage() {
             Track health history, treatments, and veterinary care
           </p>
         </div>
-        {hasPermission(["admin", "doctor"]) && (
-          <Link
-            href="/dashboard/medical/new"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+        <div className="flex items-center space-x-3">
+          <button
+            onClick={handleRefresh}
+            disabled={medicalRecordsLoading}
+            className="inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            New Record
-          </Link>
-        )}
+            <RefreshCw
+              className={`h-4 w-4 mr-2 ${
+                medicalRecordsLoading ? "animate-spin" : ""
+              }`}
+            />
+            Refresh
+          </button>
+          {hasPermission(["admin", "doctor"]) && (
+            <Link
+              href="/dashboard/medical/new"
+              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              New Record
+            </Link>
+          )}
+        </div>
       </div>
+
+      {/* Error Alert */}
+      {medicalRecordsError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 text-red-500 mr-2" />
+            <p className="text-sm text-red-700">{medicalRecordsError}</p>
+          </div>
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -146,7 +214,7 @@ export default function MedicalRecordsPage() {
                     {stat.title}
                   </p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {stat.value}
+                    {medicalRecordsLoading ? "..." : stat.value}
                   </p>
                 </div>
                 <div className={`p-3 rounded-lg ${stat.color}`}>
@@ -199,7 +267,7 @@ export default function MedicalRecordsPage() {
               <select
                 value={typeFilter}
                 onChange={(e) =>
-                  setTypeFilter(e.target.value as MedicalRecord["type"] | "all")
+                  setTypeFilter(e.target.value as MedicalRecordType | "all")
                 }
                 className="block w-full md:w-1/3 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
               >
@@ -217,9 +285,16 @@ export default function MedicalRecordsPage() {
       </div>
 
       {/* Medical Records List */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {filteredRecords.length === 0 ? (
+      <div className="space-y-4">
+        {medicalRecordsLoading ? (
           <div className="text-center py-12">
+            <RefreshCw className="h-12 w-12 text-gray-300 mx-auto mb-4 animate-spin" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              Loading medical records...
+            </h3>
+          </div>
+        ) : filteredRecords.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 text-center py-12">
             <Stethoscope className="h-12 w-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               No medical records found
@@ -242,7 +317,7 @@ export default function MedicalRecordsPage() {
         ) : (
           <>
             {/* Results Header */}
-            <div className="px-6 py-4 border-b border-gray-200">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-700">
                   Showing{" "}
@@ -265,117 +340,27 @@ export default function MedicalRecordsPage() {
               </div>
             </div>
 
-            {/* Records List */}
-            <div className="divide-y divide-gray-200">
+            {/* Records Grid */}
+            <div className="grid gap-4">
               {filteredRecords.map((record) => {
-                const animal = animals.find((a) => a.id === record.animalId);
+                const animalId =
+                  typeof record.animalId === "string"
+                    ? record.animalId
+                    : record.animalId._id || record.animalId.id;
+                const animal =
+                  animals.find((a) => (a._id || a.id) === animalId) ||
+                  (typeof record.animalId === "object"
+                    ? record.animalId
+                    : null);
+
                 return (
-                  <div
-                    key={record.id}
-                    className="p-6 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-start space-x-4">
-                      {/* Icon */}
-                      <div
-                        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${getTypeColor(
-                          record.type
-                        )}`}
-                      >
-                        <Stethoscope className="h-5 w-5" />
-                      </div>
-
-                      {/* Content */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <h3 className="text-lg font-medium text-gray-900">
-                              {animal?.name || "Unknown Animal"} -{" "}
-                              {record.type.charAt(0).toUpperCase() +
-                                record.type.slice(1)}
-                            </h3>
-                            <p className="text-sm text-gray-600 mt-1">
-                              {animal?.species} • Dr.{" "}
-                              {record.doctorId === "2"
-                                ? "Sarah Wilson"
-                                : "Unknown Doctor"}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <span
-                              className={`inline-flex px-2 py-1 text-xs font-medium rounded-full border ${getTypeColor(
-                                record.type
-                              )}`}
-                            >
-                              {record.type}
-                            </span>
-                            <p className="text-sm text-gray-500 mt-1">
-                              {formatDistanceToNow(record.date, {
-                                addSuffix: true,
-                              })}
-                            </p>
-                          </div>
-                        </div>
-
-                        {/* Details */}
-                        <div className="mt-3 space-y-2">
-                          {record.diagnosis && (
-                            <div>
-                              <span className="text-sm font-medium text-gray-700">
-                                Diagnosis:{" "}
-                              </span>
-                              <span className="text-sm text-gray-600">
-                                {record.diagnosis}
-                              </span>
-                            </div>
-                          )}
-
-                          {record.treatment && (
-                            <div>
-                              <span className="text-sm font-medium text-gray-700">
-                                Treatment:{" "}
-                              </span>
-                              <span className="text-sm text-gray-600">
-                                {record.treatment}
-                              </span>
-                            </div>
-                          )}
-
-                          {record.medications &&
-                            record.medications.length > 0 && (
-                              <div>
-                                <span className="text-sm font-medium text-gray-700">
-                                  Medications:{" "}
-                                </span>
-                                <span className="text-sm text-gray-600">
-                                  {record.medications.join(", ")}
-                                </span>
-                              </div>
-                            )}
-
-                          {record.notes && (
-                            <div>
-                              <span className="text-sm font-medium text-gray-700">
-                                Notes:{" "}
-                              </span>
-                              <span className="text-sm text-gray-600">
-                                {record.notes}
-                              </span>
-                            </div>
-                          )}
-
-                          {record.nextCheckup && (
-                            <div className="flex items-center space-x-2">
-                              <Calendar className="h-4 w-4 text-blue-500" />
-                              <span className="text-sm text-blue-600">
-                                Next checkup:{" "}
-                                {record.nextCheckup.toLocaleDateString()}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  <MedicalRecordCard
+                    key={record._id || record.id}
+                    record={record}
+                    animal={animal}
+                    onDelete={handleDeleteRecord}
+                    showActions={hasPermission(["admin", "doctor"])}
+                  />
                 );
               })}
             </div>

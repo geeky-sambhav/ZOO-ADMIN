@@ -27,35 +27,92 @@ export type HealthStatus =
   | "quarantine";
 
 export interface Animal {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
-  species: string;
-  category: AnimalCategory;
-  age: number;
-  weight: number;
-  gender: "male" | "female";
-  healthStatus: HealthStatus;
-  enclosureId: string;
-  images: string[];
+  species?: string;
+  speciesId?: string | Species;
+  category?: AnimalCategory;
+  dob: Date;
+  sex: "male" | "female";
+  status: HealthStatus;
+  enclosureId: string | Enclosure;
+  imgUrl?: string;
+  images?: string[];
+  info?: string;
   description?: string;
   arrivalDate: Date;
   lastCheckup?: Date;
-  caretakerId?: string;
+  caretakerId?: string | User;
   doctorId?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface Species {
+  _id: string;
+  commonName: string;
+  scientificName: string;
+  classification?: string;
+  origin?: string;
+  averageLifeSpan?: number;
+  dietType?: string;
+  about?: string;
+}
+
+export interface AnimalResponse {
+  message: string;
+  success?: boolean;
+  animals?: Animal[];
+  animal?: Animal;
+  count?: number;
+  error?: string;
 }
 
 // Medical Records
+export type MedicalRecordType =
+  | "checkup"
+  | "vaccination"
+  | "treatment"
+  | "surgery"
+  | "emergency";
+
 export interface MedicalRecord {
-  id: string;
-  animalId: string;
-  doctorId: string;
+  _id?: string;
+  id?: string;
+  animalId: string | Animal;
+  doctorId: string | User;
   date: Date;
-  type: "checkup" | "vaccination" | "treatment" | "surgery" | "emergency";
+  type: MedicalRecordType;
   diagnosis?: string;
   treatment?: string;
   medications?: string[];
   notes?: string;
   nextCheckup?: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface MedicalRecordResponse {
+  success: boolean;
+  message: string;
+  medicalRecord?: MedicalRecord;
+  medicalRecords?: MedicalRecord[];
+  medicalHistory?: MedicalRecord[];
+  animal?: {
+    id: string;
+    name: string;
+    status: string;
+  };
+  totalRecords?: number;
+  pagination?: {
+    currentPage: number;
+    totalPages: number;
+    totalRecords: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
+  error?: string;
 }
 
 // Inventory Types
@@ -91,33 +148,69 @@ export interface Enclosure {
 
 // Feeding Schedule
 export interface FeedingSchedule {
-  id: string;
-  animalId: string;
+  _id?: string;
+  id?: string;
+  item: string | InventoryItem;
+  animalId: string | Animal;
   foodType: string;
   quantity: number;
   frequency: string;
   time: string;
-  caretakerId: string;
+  caretakerId: string | User;
   lastFed?: Date;
   notes?: string;
+  isActive?: boolean;
+  isOverdue?: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface FeedingScheduleResponse {
+  success: boolean;
+  message: string;
+  feedingSchedule?: FeedingSchedule;
+  feedingSchedules?: FeedingSchedule[];
+  count?: number;
+  animal?: {
+    id: string;
+    name: string;
+    status: string;
+  };
+  error?: string;
 }
 
 // Notifications
+export type NotificationType =
+  | "low_inventory"
+  | "medical_checkup"
+  | "feeding_due"
+  | "system"
+  | "alert"
+  | "health_alert"
+  | "maintenance"
+  | "general";
+
+export type NotificationPriority = "low" | "medium" | "high" | "critical";
+
 export interface Notification {
-  id: string;
-  type:
-    | "low_inventory"
-    | "medical_checkup"
-    | "feeding_due"
-    | "system"
-    | "alert";
+  _id?: string;
+  id?: string;
+  type: NotificationType;
   title: string;
   message: string;
-  priority: "low" | "medium" | "high" | "critical";
+  priority: NotificationPriority;
   read: boolean;
   createdAt: Date;
-  userId?: string;
+  updatedAt?: Date;
+  userId?: string | User;
   relatedId?: string;
+}
+
+export interface NotificationStats {
+  total: number;
+  unread: number;
+  read: number;
+  typeBreakdown: Record<NotificationType, number>;
 }
 
 // Audit Log
@@ -127,8 +220,8 @@ export interface AuditLog {
   action: string;
   resource: string;
   resourceId: string;
-  oldData?: any;
-  newData?: any;
+  oldData?: Record<string, unknown>;
+  newData?: Record<string, unknown>;
   timestamp: Date;
   ipAddress?: string;
 }
@@ -141,6 +234,8 @@ export interface DashboardStats {
   lowInventoryItems: number;
   upcomingCheckups: number;
   feedingsDue: number;
+  overdueFeedings: number;
+  activeFeedingSchedules: number;
   categoryCounts: Record<AnimalCategory, number>;
   inventoryByCategory: Record<InventoryCategory, number>;
 }

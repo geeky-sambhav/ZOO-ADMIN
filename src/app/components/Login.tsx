@@ -29,8 +29,6 @@ const Login = () => {
 
     if (!formData.password) {
       newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
     }
 
     setErrors(newErrors);
@@ -39,14 +37,15 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!validateForm()) return;
 
     try {
       await login(formData.email, formData.password);
       router.push("/dashboard");
-    } catch {
-      setErrors({ general: "Invalid email or password" });
+    } catch (error) {
+      setErrors({
+        general: error instanceof Error ? error.message : "An error occurred",
+      });
     }
   };
 
@@ -94,9 +93,6 @@ const Login = () => {
           </p>
           <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
             <p className="font-semibold mb-1">Demo Accounts:</p>
-            <p>Admin: admin@zoo.com / password123</p>
-            <p>Doctor: doctor@zoo.com / password123</p>
-            <p>Caretaker: caretaker@zoo.com / password123</p>
           </div>
         </div>
 
@@ -262,10 +258,6 @@ const Login = () => {
                 )}
               </button>
             </div>
-
-           
-
-      
           </form>
         </div>
       </div>

@@ -8,41 +8,13 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isHydrated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
+  initializeAuth: () => Promise<void>;
   hasPermission: (requiredRoles: UserRole[]) => boolean;
+  setHydrated: () => void;
 }
-
-// Mock users for demo purposes
-const mockUsers: User[] = [
-  {
-    id: "1",
-    email: "admin@zoo.com",
-    name: "John Admin",
-    role: "admin",
-    avatar: "/avatars/admin.jpg",
-    createdAt: new Date("2024-01-01"),
-    lastLogin: new Date(),
-  },
-  {
-    id: "2",
-    email: "doctor@zoo.com",
-    name: "Dr. Sarah Wilson",
-    role: "doctor",
-    avatar: "/avatars/doctor.jpg",
-    createdAt: new Date("2024-01-01"),
-    lastLogin: new Date(),
-  },
-  {
-    id: "3",
-    email: "caretaker@zoo.com",
-    name: "Mike Caretaker",
-    role: "caretaker",
-    avatar: "/avatars/caretaker.jpg",
-    createdAt: new Date("2024-01-01"),
-    lastLogin: new Date(),
-  },
-];
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -50,28 +22,126 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
+      isHydrated: false,
+      setHydrated: () => set({ isHydrated: true }),
+
+      initializeAuth: async () => {
+        set({ isLoading: true });
+        try {
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+          if (!apiUrl) {
+            set({ isLoading: false });
+            return;
+          }
+
+          // Check if user is authenticated by calling a protected endpoint
+          const response = await fetch(`${apiUrl}/api/auth/me`, {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (response.ok) {
+            const userData = await response.json();
+
+            // Transform backend response to match frontend User interface
+            const user = {
+              id: userData._id,
+              email: userData.email,
+              name: userData.username,
+              role: "admin" as UserRole, // You may need to add role to your backend response
+              createdAt: new Date(), // You may need to add this to your backend response
+            };
+
+            set({
+              user,
+              isAuthenticated: true,
+              isLoading: false,
+            });
+          } else {
+            set({
+              user: null,
+              isAuthenticated: false,
+              isLoading: false,
+            });
+          }
+        } catch (error) {
+          console.warn("Auth initialization failed:", error);
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+        }
+      },
 
       login: async (email: string, password: string) => {
         set({ isLoading: true });
 
         try {
-          // Simulate API call
-          await new Promise((resolve) => setTimeout(resolve, 1000));
-
-          // Find user by email (in real app, this would be server-side)
-          const user = mockUsers.find((u) => u.email === email);
-
-          if (!user) {
-            throw new Error("Invalid credentials");
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+          if (!apiUrl) {
+            throw new Error("API URL not configured");
           }
 
-          // In real app, password would be verified server-side
-          if (password !== "password123") {
-            throw new Error("Invalid credentials");
+          const response = await fetch(`${apiUrl}/api/auth/login`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              email,
+              password,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => ({}));
+            // Handle both error response formats from your backend
+            const errorMessage =
+              errorData.message || errorData.error || "Invalid credentials";
+            throw new Error(errorMessage);
           }
 
-          // Update last login
-          user.lastLogin = new Date();
+          const data = await response.json();
+
+          // Check if login was successful
+          if (!data.success) {
+            throw new Error(data.message || "Login failed");
+          }
+
+          // After successful login, fetch user data
+          // Since the backend sets the JWT cookie, we can now call the /me endpoint
+          const userResponse = await fetch(`${apiUrl}/api/auth/me`, {
+            method: "GET",
+            credentials: "include",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          });
+
+          if (!userResponse.ok) {
+            throw new Error("Failed to fetch user data");
+          }
+
+          const userData = await userResponse.json();
+
+          // Backend returns { _id, username, email } directly, not nested in user object
+          if (!userData._id || !userData.email) {
+            throw new Error("Invalid user data received");
+          }
+
+          // Transform backend response to match frontend User interface
+          const user = {
+            id: userData._id,
+            email: userData.email,
+            name: userData.username,
+            role: "admin" as UserRole, // You may need to add role to your backend response
+            createdAt: new Date(), // You may need to add this to your backend response
+          };
 
           set({
             user,
@@ -84,7 +154,25 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => {
+      logout: async () => {
+        try {
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+          if (apiUrl) {
+            // Call backend logout endpoint to clear cookies
+            await fetch(`${apiUrl}/api/auth/logout`, {
+              method: "POST",
+              credentials: "include",
+              headers: {
+                "Content-Type": "application/json",
+              },
+            });
+          }
+        } catch (error) {
+          // Continue with logout even if backend call fails
+          console.warn("Backend logout failed:", error);
+        }
+
+        // Clear local state
         set({
           user: null,
           isAuthenticated: false,
@@ -103,6 +191,9 @@ export const useAuthStore = create<AuthState>()(
         user: state.user,
         isAuthenticated: state.isAuthenticated,
       }),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated();
+      }
     }
   )
 );

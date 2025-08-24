@@ -12,20 +12,44 @@ import {
   DashboardStats,
   AnimalCategory,
   InventoryCategory,
+  User,
 } from "@/types";
+import animalService from "@/services/animalService";
+import medicalRecordService, {
+  MedicalRecordFilters,
+} from "@/services/medicalRecordService";
+import notificationService, {
+  NotificationFilters,
+} from "@/services/notificationService";
 
 interface DataState {
   // Animals
   animals: Animal[];
-  addAnimal: (animal: Omit<Animal, "id">) => void;
-  updateAnimal: (id: string, updates: Partial<Animal>) => void;
-  deleteAnimal: (id: string) => void;
+  loading: boolean;
+  error: string | null;
+  fetchAnimals: () => Promise<void>;
+  addAnimal: (
+    animal: Omit<Animal, "_id" | "id" | "createdAt" | "updatedAt">
+  ) => Promise<void>;
+  updateAnimal: (id: string, updates: Partial<Animal>) => Promise<void>;
+  deleteAnimal: (id: string) => Promise<void>;
   getAnimalsByCategory: (category: AnimalCategory) => Animal[];
 
   // Medical Records
   medicalRecords: MedicalRecord[];
-  addMedicalRecord: (record: Omit<MedicalRecord, "id">) => void;
-  updateMedicalRecord: (id: string, updates: Partial<MedicalRecord>) => void;
+  medicalRecordsLoading: boolean;
+  medicalRecordsError: string | null;
+  fetchMedicalRecords: (filters?: MedicalRecordFilters) => Promise<void>;
+  fetchMedicalRecord: (id: string) => Promise<MedicalRecord | null>;
+  addMedicalRecord: (
+    record: Omit<MedicalRecord, "_id" | "id" | "createdAt" | "updatedAt">
+  ) => Promise<void>;
+  updateMedicalRecord: (
+    id: string,
+    updates: Partial<MedicalRecord>
+  ) => Promise<void>;
+  deleteMedicalRecord: (id: string) => Promise<void>;
+  fetchAnimalMedicalHistory: (animalId: string) => Promise<MedicalRecord[]>;
   getMedicalRecordsByAnimal: (animalId: string) => MedicalRecord[];
 
   // Inventory
@@ -42,17 +66,42 @@ interface DataState {
 
   // Feeding Schedules
   feedingSchedules: FeedingSchedule[];
-  addFeedingSchedule: (schedule: Omit<FeedingSchedule, "id">) => void;
+  feedingSchedulesLoading: boolean;
+  feedingSchedulesError: string | null;
+  fetchFeedingSchedules: (filters?: {
+    animalId?: string;
+    caretakerId?: string;
+    isActive?: boolean;
+    isOverdue?: boolean;
+  }) => Promise<void>;
+  addFeedingSchedule: (
+    schedule: Omit<
+      FeedingSchedule,
+      "_id" | "id" | "createdAt" | "updatedAt" | "isOverdue"
+    >
+  ) => Promise<void>;
   updateFeedingSchedule: (
     id: string,
     updates: Partial<FeedingSchedule>
-  ) => void;
+  ) => Promise<void>;
+  deleteFeedingSchedule: (id: string) => Promise<void>;
+  markFeedingCompleted: (id: string, notes?: string) => Promise<void>;
   getFeedingSchedulesByAnimal: (animalId: string) => FeedingSchedule[];
+  getOverdueFeedingSchedules: () => Promise<void>;
 
   // Notifications
   notifications: Notification[];
-  addNotification: (notification: Omit<Notification, "id">) => void;
-  markNotificationRead: (id: string) => void;
+  notificationsLoading: boolean;
+  notificationsError: string | null;
+  unreadCount: number;
+  fetchNotifications: (filters?: NotificationFilters) => Promise<void>;
+  fetchUnreadCount: () => Promise<void>;
+  addNotification: (
+    notification: Omit<Notification, "_id" | "id" | "createdAt" | "updatedAt">
+  ) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  deleteNotification: (id: string) => Promise<void>;
   getUnreadNotifications: () => Notification[];
 
   // Audit Logs
@@ -63,60 +112,7 @@ interface DataState {
   getDashboardStats: () => DashboardStats;
 }
 
-// Mock data
-const mockAnimals: Animal[] = [
-  {
-    id: "1",
-    name: "Leo",
-    species: "African Lion",
-    category: "mammals",
-    age: 5,
-    weight: 180,
-    gender: "male",
-    healthStatus: "healthy",
-    enclosureId: "1",
-    images: ["/animals/lion1.jpg"],
-    description: "Majestic male lion, pride leader",
-    arrivalDate: new Date("2020-03-15"),
-    lastCheckup: new Date("2024-01-10"),
-    caretakerId: "3",
-    doctorId: "2",
-  },
-  {
-    id: "2",
-    name: "Bella",
-    species: "Bengal Tiger",
-    category: "mammals",
-    age: 4,
-    weight: 140,
-    gender: "female",
-    healthStatus: "healthy",
-    enclosureId: "2",
-    images: ["/animals/tiger1.jpg"],
-    description: "Beautiful female Bengal tiger",
-    arrivalDate: new Date("2021-06-20"),
-    lastCheckup: new Date("2024-01-08"),
-    caretakerId: "3",
-    doctorId: "2",
-  },
-  {
-    id: "3",
-    name: "Charlie",
-    species: "Green Iguana",
-    category: "reptiles",
-    age: 3,
-    weight: 4.5,
-    gender: "male",
-    healthStatus: "recovering",
-    enclosureId: "3",
-    images: ["/animals/iguana1.jpg"],
-    description: "Large green iguana recovering from minor injury",
-    arrivalDate: new Date("2022-01-10"),
-    lastCheckup: new Date("2024-01-12"),
-    caretakerId: "3",
-    doctorId: "2",
-  },
-];
+// Mock data - removed as we'll use API data
 
 const mockInventory: InventoryItem[] = [
   {
@@ -200,44 +196,231 @@ const mockEnclosures: Enclosure[] = [
 
 export const useDataStore = create<DataState>((set, get) => ({
   // Animals
-  animals: mockAnimals,
-  addAnimal: (animal) => {
-    const newAnimal = { ...animal, id: Date.now().toString() };
-    set((state) => ({ animals: [...state.animals, newAnimal] }));
+  animals: [],
+  loading: false,
+  error: null,
+
+  fetchAnimals: async () => {
+    set({ loading: true, error: null });
+    try {
+      const response = await animalService.getAllAnimals();
+      const animals = response.animals || [];
+      set({ animals, loading: false });
+    } catch (error) {
+      set({
+        error:
+          error instanceof Error ? error.message : "Failed to fetch animals",
+        loading: false,
+      });
+    }
   },
-  updateAnimal: (id, updates) => {
-    set((state) => ({
-      animals: state.animals.map((animal) =>
-        animal.id === id ? { ...animal, ...updates } : animal
-      ),
-    }));
+
+  addAnimal: async (animal) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await animalService.addAnimal(animal);
+      if (response.success && response.animal) {
+        set((state) => ({
+          animals: [...state.animals, response.animal!],
+          loading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        error: error instanceof Error ? error.message : "Failed to add animal",
+        loading: false,
+      });
+      throw error;
+    }
   },
-  deleteAnimal: (id) => {
-    set((state) => ({
-      animals: state.animals.filter((animal) => animal.id !== id),
-    }));
+
+  updateAnimal: async (id, updates) => {
+    set({ loading: true, error: null });
+    try {
+      const response = await animalService.updateAnimal(id, updates);
+      if (response.animal) {
+        set((state) => ({
+          animals: state.animals.map((animal) =>
+            animal._id === id || animal.id === id ? response.animal! : animal
+          ),
+          loading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        error:
+          error instanceof Error ? error.message : "Failed to update animal",
+        loading: false,
+      });
+      throw error;
+    }
   },
+
+  deleteAnimal: async (id) => {
+    set({ loading: true, error: null });
+    try {
+      await animalService.deleteAnimal(id);
+      set((state) => ({
+        animals: state.animals.filter(
+          (animal) => animal._id !== id && animal.id !== id
+        ),
+        loading: false,
+      }));
+    } catch (error) {
+      set({
+        error:
+          error instanceof Error ? error.message : "Failed to delete animal",
+        loading: false,
+      });
+      throw error;
+    }
+  },
+
   getAnimalsByCategory: (category) => {
     return get().animals.filter((animal) => animal.category === category);
   },
 
   // Medical Records
   medicalRecords: [],
-  addMedicalRecord: (record) => {
-    const newRecord = { ...record, id: Date.now().toString() };
-    set((state) => ({ medicalRecords: [...state.medicalRecords, newRecord] }));
+  medicalRecordsLoading: false,
+  medicalRecordsError: null,
+
+  fetchMedicalRecords: async (filters) => {
+    set({ medicalRecordsLoading: true, medicalRecordsError: null });
+    try {
+      const response = await medicalRecordService.getAllMedicalRecords(filters);
+      const medicalRecords = response.medicalRecords || [];
+      set({ medicalRecords, medicalRecordsLoading: false });
+    } catch (error) {
+      set({
+        medicalRecordsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch medical records",
+        medicalRecordsLoading: false,
+      });
+    }
   },
-  updateMedicalRecord: (id, updates) => {
-    set((state) => ({
-      medicalRecords: state.medicalRecords.map((record) =>
-        record.id === id ? { ...record, ...updates } : record
-      ),
-    }));
+
+  fetchMedicalRecord: async (id) => {
+    set({ medicalRecordsLoading: true, medicalRecordsError: null });
+    try {
+      const response = await medicalRecordService.getMedicalRecord(id);
+      set({ medicalRecordsLoading: false });
+      return response.medicalRecord || null;
+    } catch (error) {
+      set({
+        medicalRecordsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch medical record",
+        medicalRecordsLoading: false,
+      });
+      return null;
+    }
   },
+
+  addMedicalRecord: async (record) => {
+    set({ medicalRecordsLoading: true, medicalRecordsError: null });
+    try {
+      const response = await medicalRecordService.addMedicalRecord(record);
+      if (response.success && response.medicalRecord) {
+        set((state) => ({
+          medicalRecords: [...state.medicalRecords, response.medicalRecord!],
+          medicalRecordsLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        medicalRecordsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to add medical record",
+        medicalRecordsLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  updateMedicalRecord: async (id, updates) => {
+    set({ medicalRecordsLoading: true, medicalRecordsError: null });
+    try {
+      const response = await medicalRecordService.updateMedicalRecord(
+        id,
+        updates
+      );
+      if (response.medicalRecord) {
+        set((state) => ({
+          medicalRecords: state.medicalRecords.map((record) =>
+            record._id === id || record.id === id
+              ? response.medicalRecord!
+              : record
+          ),
+          medicalRecordsLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        medicalRecordsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to update medical record",
+        medicalRecordsLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  deleteMedicalRecord: async (id) => {
+    set({ medicalRecordsLoading: true, medicalRecordsError: null });
+    try {
+      await medicalRecordService.deleteMedicalRecord(id);
+      set((state) => ({
+        medicalRecords: state.medicalRecords.filter(
+          (record) => record._id !== id && record.id !== id
+        ),
+        medicalRecordsLoading: false,
+      }));
+    } catch (error) {
+      set({
+        medicalRecordsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete medical record",
+        medicalRecordsLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  fetchAnimalMedicalHistory: async (animalId) => {
+    set({ medicalRecordsLoading: true, medicalRecordsError: null });
+    try {
+      const response = await medicalRecordService.getAnimalMedicalHistory(
+        animalId
+      );
+      set({ medicalRecordsLoading: false });
+      return response.medicalHistory || [];
+    } catch (error) {
+      set({
+        medicalRecordsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch medical history",
+        medicalRecordsLoading: false,
+      });
+      return [];
+    }
+  },
+
   getMedicalRecordsByAnimal: (animalId) => {
-    return get().medicalRecords.filter(
-      (record) => record.animalId === animalId
-    );
+    return get().medicalRecords.filter((record) => {
+      const recordAnimalId =
+        typeof record.animalId === "string"
+          ? record.animalId
+          : record.animalId._id || record.animalId.id;
+      return recordAnimalId === animalId;
+    });
   },
 
   // Inventory
@@ -278,61 +461,308 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   // Feeding Schedules
   feedingSchedules: [],
-  addFeedingSchedule: (schedule) => {
-    const newSchedule = { ...schedule, id: Date.now().toString() };
-    set((state) => ({
-      feedingSchedules: [...state.feedingSchedules, newSchedule],
-    }));
+  feedingSchedulesLoading: false,
+  feedingSchedulesError: null,
+
+  fetchFeedingSchedules: async (filters) => {
+    set({ feedingSchedulesLoading: true, feedingSchedulesError: null });
+    try {
+      const feedingService = (await import("@/services/feedingService"))
+        .default;
+      const response = await feedingService.getAllFeedingSchedules(filters);
+      if (response.feedingSchedules) {
+        set({
+          feedingSchedules: response.feedingSchedules,
+          feedingSchedulesLoading: false,
+        });
+      }
+    } catch (error) {
+      set({
+        feedingSchedulesError:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch feeding schedules",
+        feedingSchedulesLoading: false,
+      });
+    }
   },
-  updateFeedingSchedule: (id, updates) => {
-    set((state) => ({
-      feedingSchedules: state.feedingSchedules.map((schedule) =>
-        schedule.id === id ? { ...schedule, ...updates } : schedule
-      ),
-    }));
+
+  addFeedingSchedule: async (schedule) => {
+    set({ feedingSchedulesLoading: true, feedingSchedulesError: null });
+    try {
+      const feedingService = (await import("@/services/feedingService"))
+        .default;
+      const response = await feedingService.addFeedingSchedule(schedule);
+      if (response.feedingSchedule) {
+        set((state) => ({
+          feedingSchedules: [
+            ...state.feedingSchedules,
+            response.feedingSchedule!,
+          ],
+          feedingSchedulesLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        feedingSchedulesError:
+          error instanceof Error
+            ? error.message
+            : "Failed to add feeding schedule",
+        feedingSchedulesLoading: false,
+      });
+      throw error;
+    }
   },
+
+  updateFeedingSchedule: async (id, updates) => {
+    set({ feedingSchedulesLoading: true, feedingSchedulesError: null });
+    try {
+      const feedingService = (await import("@/services/feedingService"))
+        .default;
+      const response = await feedingService.updateFeedingSchedule(id, updates);
+      if (response.feedingSchedule) {
+        set((state) => ({
+          feedingSchedules: state.feedingSchedules.map((schedule) =>
+            (schedule._id || schedule.id) === id
+              ? response.feedingSchedule!
+              : schedule
+          ),
+          feedingSchedulesLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        feedingSchedulesError:
+          error instanceof Error
+            ? error.message
+            : "Failed to update feeding schedule",
+        feedingSchedulesLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  deleteFeedingSchedule: async (id) => {
+    set({ feedingSchedulesLoading: true, feedingSchedulesError: null });
+    try {
+      const feedingService = (await import("@/services/feedingService"))
+        .default;
+      await feedingService.deleteFeedingSchedule(id);
+      set((state) => ({
+        feedingSchedules: state.feedingSchedules.filter(
+          (schedule) => (schedule._id || schedule.id) !== id
+        ),
+        feedingSchedulesLoading: false,
+      }));
+    } catch (error) {
+      set({
+        feedingSchedulesError:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete feeding schedule",
+        feedingSchedulesLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  markFeedingCompleted: async (id, notes) => {
+    set({ feedingSchedulesLoading: true, feedingSchedulesError: null });
+    try {
+      const feedingService = (await import("@/services/feedingService"))
+        .default;
+      const response = await feedingService.markFeedingCompleted(id, notes);
+      if (response.feedingSchedule) {
+        set((state) => ({
+          feedingSchedules: state.feedingSchedules.map((schedule) =>
+            (schedule._id || schedule.id) === id
+              ? response.feedingSchedule!
+              : schedule
+          ),
+          feedingSchedulesLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        feedingSchedulesError:
+          error instanceof Error
+            ? error.message
+            : "Failed to mark feeding as completed",
+        feedingSchedulesLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  getOverdueFeedingSchedules: async () => {
+    set({ feedingSchedulesLoading: true, feedingSchedulesError: null });
+    try {
+      const feedingService = (await import("@/services/feedingService"))
+        .default;
+      const response = await feedingService.getOverdueFeedings();
+      if (response.feedingSchedules) {
+        set({
+          feedingSchedules: response.feedingSchedules,
+          feedingSchedulesLoading: false,
+        });
+      }
+    } catch (error) {
+      set({
+        feedingSchedulesError:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch overdue feeding schedules",
+        feedingSchedulesLoading: false,
+      });
+    }
+  },
+
   getFeedingSchedulesByAnimal: (animalId) => {
-    return get().feedingSchedules.filter(
-      (schedule) => schedule.animalId === animalId
-    );
+    return get().feedingSchedules.filter((schedule) => {
+      const scheduleAnimalId =
+        typeof schedule.animalId === "string"
+          ? schedule.animalId
+          : schedule.animalId._id || schedule.animalId.id;
+      return scheduleAnimalId === animalId;
+    });
   },
 
   // Notifications
-  notifications: [
-    {
-      id: "1",
-      type: "low_inventory",
-      title: "Low Stock Alert",
-      message: "Cleaning Supplies are running low (8 sets remaining)",
-      priority: "medium",
-      read: false,
-      createdAt: new Date(),
-      relatedId: "3",
-    },
-    {
-      id: "2",
-      type: "medical_checkup",
-      title: "Checkup Due",
-      message: "Leo the Lion is due for routine checkup",
-      priority: "high",
-      read: false,
-      createdAt: new Date(),
-      relatedId: "1",
-    },
-  ],
-  addNotification: (notification) => {
-    const newNotification = { ...notification, id: Date.now().toString() };
-    set((state) => ({
-      notifications: [...state.notifications, newNotification],
-    }));
+  notifications: [],
+  notificationsLoading: false,
+  notificationsError: null,
+  unreadCount: 0,
+
+  fetchNotifications: async (filters) => {
+    set({ notificationsLoading: true, notificationsError: null });
+    try {
+      const response = await notificationService.getNotifications(filters);
+      if (response.success && response.data) {
+        set({
+          notifications: response.data,
+          notificationsLoading: false,
+        });
+      }
+    } catch (error) {
+      set({
+        notificationsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch notifications",
+        notificationsLoading: false,
+      });
+    }
   },
-  markNotificationRead: (id) => {
-    set((state) => ({
-      notifications: state.notifications.map((notification) =>
-        notification.id === id ? { ...notification, read: true } : notification
-      ),
-    }));
+
+  fetchUnreadCount: async () => {
+    try {
+      const response = await notificationService.getUnreadCount();
+      if (response.success && response.data) {
+        set({ unreadCount: response.data.unreadCount });
+      }
+    } catch (error) {
+      console.error("Failed to fetch unread count:", error);
+    }
   },
+
+  addNotification: async (notification) => {
+    set({ notificationsLoading: true, notificationsError: null });
+    try {
+      // Convert User object to string if needed
+      const notificationData = {
+        ...notification,
+        userId:
+          typeof notification.userId === "object"
+            ? (notification.userId as User)?.id
+            : notification.userId,
+      };
+
+      const response = await notificationService.createNotification(
+        notificationData
+      );
+      if (response.success && response.data) {
+        set((state) => ({
+          notifications: [response.data, ...state.notifications],
+          notificationsLoading: false,
+          unreadCount: state.unreadCount + 1,
+        }));
+      }
+    } catch (error) {
+      set({
+        notificationsError:
+          error instanceof Error
+            ? error.message
+            : "Failed to create notification",
+        notificationsLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  markNotificationRead: async (id) => {
+    try {
+      const response = await notificationService.markAsRead(id);
+      if (response.success) {
+        set((state) => ({
+          notifications: state.notifications.map((notification) =>
+            notification._id === id || notification.id === id
+              ? { ...notification, read: true }
+              : notification
+          ),
+          unreadCount: Math.max(0, state.unreadCount - 1),
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+      throw error;
+    }
+  },
+
+  markAllNotificationsRead: async () => {
+    try {
+      const response = await notificationService.markAllAsRead();
+      if (response.success) {
+        set((state) => ({
+          notifications: state.notifications.map((notification) => ({
+            ...notification,
+            read: true,
+          })),
+          unreadCount: 0,
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+      throw error;
+    }
+  },
+
+  deleteNotification: async (id) => {
+    try {
+      const response = await notificationService.deleteNotification(id);
+      if (response.success) {
+        set((state) => {
+          const notificationToDelete = state.notifications.find(
+            (n) => n._id === id || n.id === id
+          );
+          const wasUnread = notificationToDelete && !notificationToDelete.read;
+
+          return {
+            notifications: state.notifications.filter(
+              (notification) =>
+                notification._id !== id && notification.id !== id
+            ),
+            unreadCount: wasUnread
+              ? Math.max(0, state.unreadCount - 1)
+              : state.unreadCount,
+          };
+        });
+      }
+    } catch (error) {
+      console.error("Failed to delete notification:", error);
+      throw error;
+    }
+  },
+
   getUnreadNotifications: () => {
     return get().notifications.filter((notification) => !notification.read);
   },
@@ -346,21 +776,28 @@ export const useDataStore = create<DataState>((set, get) => ({
 
   // Dashboard Stats
   getDashboardStats: () => {
-    const { animals, inventory } = get();
+    const { animals, inventory, feedingSchedules } = get();
 
     const totalAnimals = animals.length;
-    const healthyAnimals = animals.filter(
-      (a) => a.healthStatus === "healthy"
-    ).length;
+    const healthyAnimals = animals.filter((a) => a.status === "healthy").length;
     const sickAnimals = animals.filter(
-      (a) => a.healthStatus === "sick" || a.healthStatus === "injured"
+      (a) => a.status === "sick" || a.status === "injured"
     ).length;
     const lowInventoryItems = inventory.filter(
       (item) => item.quantity <= item.minThreshold
     ).length;
 
+    // Feeding schedule statistics
+    const activeFeedingSchedules = feedingSchedules.filter(
+      (s) => s.isActive
+    ).length;
+    const overdueFeedings = feedingSchedules.filter((s) => s.isOverdue).length;
+    const feedingsDue = overdueFeedings; // For backward compatibility
+
     const categoryCounts = animals.reduce((acc, animal) => {
-      acc[animal.category] = (acc[animal.category] || 0) + 1;
+      if (animal.category) {
+        acc[animal.category] = (acc[animal.category] || 0) + 1;
+      }
       return acc;
     }, {} as Record<AnimalCategory, number>);
 
@@ -374,8 +811,10 @@ export const useDataStore = create<DataState>((set, get) => ({
       healthyAnimals,
       sickAnimals,
       lowInventoryItems,
-      upcomingCheckups: 2, // Mock data
-      feedingsDue: 5, // Mock data
+      upcomingCheckups: 2, // Mock data - TODO: integrate with medical records
+      feedingsDue,
+      overdueFeedings,
+      activeFeedingSchedules,
       categoryCounts,
       inventoryByCategory,
     };

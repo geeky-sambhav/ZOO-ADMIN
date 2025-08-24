@@ -5,6 +5,8 @@ import { useAuthStore } from "@/store/authStore";
 import { useDataStore } from "@/store/dataStore";
 import { Bell, Search, LogOut, User, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
+import NotificationBadge from "@/components/notifications/NotificationBadge";
+import { formatDistanceToNow } from "date-fns";
 
 const Header = () => {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -12,7 +14,12 @@ const Header = () => {
   const [searchQuery, setSearchQuery] = useState("");
 
   const { user, logout } = useAuthStore();
-  const { getUnreadNotifications } = useDataStore();
+  const {
+    unreadCount,
+    getUnreadNotifications,
+    fetchUnreadCount,
+    markNotificationRead,
+  } = useDataStore();
   const router = useRouter();
 
   const notificationRef = useRef<HTMLDivElement>(null);
@@ -21,6 +28,9 @@ const Header = () => {
   const unreadNotifications = getUnreadNotifications();
 
   useEffect(() => {
+    // Fetch unread count on component mount
+    fetchUnreadCount();
+
     const handleClickOutside = (event: MouseEvent) => {
       if (
         notificationRef.current &&
@@ -38,11 +48,17 @@ const Header = () => {
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [fetchUnreadCount]);
 
-  const handleLogout = () => {
-    logout();
-    router.push("/");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.push("/");
+    } catch (error) {
+      console.error("Logout failed:", error);
+      // Still redirect even if logout fails
+      router.push("/");
+    }
   };
 
   const handleSearch = (e: React.FormEvent) => {
@@ -80,8 +96,10 @@ const Header = () => {
               className="relative p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-lg"
             >
               <Bell className="h-6 w-6" />
-              {unreadNotifications.length > 0 && (
-                <span className="absolute top-1 right-1 block h-2 w-2 rounded-full bg-red-400"></span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
               )}
             </button>
 
@@ -98,10 +116,23 @@ const Header = () => {
                       No new notifications
                     </div>
                   ) : (
-                    unreadNotifications.map((notification) => (
+                    unreadNotifications.slice(0, 5).map((notification) => (
                       <div
-                        key={notification.id}
-                        className="p-4 border-b border-gray-100 hover:bg-gray-50"
+                        key={notification._id || notification.id}
+                        className="p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        onClick={async () => {
+                          const id = notification._id || notification.id || "";
+                          try {
+                            await markNotificationRead(id);
+                            setShowNotifications(false);
+                            router.push("/dashboard/notifications");
+                          } catch (error) {
+                            console.error(
+                              "Failed to mark notification as read:",
+                              error
+                            );
+                          }
+                        }}
                       >
                         <div className="flex items-start">
                           <div
@@ -119,11 +150,16 @@ const Header = () => {
                             <p className="text-sm font-medium text-gray-900">
                               {notification.title}
                             </p>
-                            <p className="text-sm text-gray-500 mt-1">
+                            <p className="text-sm text-gray-500 mt-1 line-clamp-2">
                               {notification.message}
                             </p>
                             <p className="text-xs text-gray-400 mt-1">
-                              {notification.createdAt.toLocaleString()}
+                              {formatDistanceToNow(
+                                new Date(notification.createdAt),
+                                {
+                                  addSuffix: true,
+                                }
+                              )}
                             </p>
                           </div>
                         </div>

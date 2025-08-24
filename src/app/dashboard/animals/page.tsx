@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
-import { Animal, AnimalCategory, HealthStatus } from "@/types";
+import { AnimalCategory, HealthStatus } from "@/types";
 import {
   Plus,
   Search,
@@ -27,18 +27,27 @@ export default function AnimalsPage() {
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [showFilters, setShowFilters] = useState(false);
 
-  const { animals } = useDataStore();
+  const { animals, loading, error, fetchAnimals } = useDataStore();
   const { hasPermission } = useAuthStore();
+
+  // Fetch animals on component mount
+  useEffect(() => {
+    fetchAnimals();
+  }, [fetchAnimals]);
 
   // Filter animals based on search and filters
   const filteredAnimals = animals.filter((animal) => {
+    const species =
+      typeof animal.speciesId === "object"
+        ? animal.speciesId?.commonName
+        : animal.species;
     const matchesSearch =
       animal.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      animal.species.toLowerCase().includes(searchTerm.toLowerCase());
+      (species && species.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory =
       categoryFilter === "all" || animal.category === categoryFilter;
     const matchesHealth =
-      healthFilter === "all" || animal.healthStatus === healthFilter;
+      healthFilter === "all" || animal.status === healthFilter;
 
     return matchesSearch && matchesCategory && matchesHealth;
   });
@@ -61,23 +70,6 @@ export default function AnimalsPage() {
     "quarantine",
   ];
 
-  const getHealthStatusColor = (status: HealthStatus) => {
-    switch (status) {
-      case "healthy":
-        return "text-green-600 bg-green-50";
-      case "sick":
-        return "text-red-600 bg-red-50";
-      case "injured":
-        return "text-orange-600 bg-orange-50";
-      case "recovering":
-        return "text-blue-600 bg-blue-50";
-      case "quarantine":
-        return "text-purple-600 bg-purple-50";
-      default:
-        return "text-gray-600 bg-gray-50";
-    }
-  };
-
   const statsCards = [
     {
       title: "Total Animals",
@@ -87,22 +79,67 @@ export default function AnimalsPage() {
     },
     {
       title: "Healthy",
-      value: animals.filter((a) => a.healthStatus === "healthy").length,
+      value: animals.filter((a) => a.status === "healthy").length,
       icon: Heart,
       color: "text-green-600 bg-green-50",
     },
     {
       title: "Need Attention",
       value: animals.filter((a) =>
-        ["sick", "injured", "quarantine"].includes(a.healthStatus)
+        ["sick", "injured", "quarantine"].includes(a.status)
       ).length,
       icon: AlertTriangle,
       color: "text-red-600 bg-red-50",
     },
   ];
 
+  // Show loading state
+  if (loading && animals.length === 0) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              Animal Management
+            </h1>
+            <p className="text-gray-600">Loading animals...</p>
+          </div>
+        </div>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Error Alert */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <AlertTriangle className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">
+                Error loading animals
+              </h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{error}</p>
+              </div>
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={() => fetchAnimals()}
+                  className="bg-red-100 px-3 py-2 rounded-md text-sm font-medium text-red-800 hover:bg-red-200 transition-colors"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

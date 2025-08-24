@@ -5,6 +5,7 @@ import { Heart, MapPin, Calendar, Eye, Edit, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { useAuthStore } from "@/store/authStore";
+import { useDataStore } from "@/store/dataStore";
 
 interface AnimalTableProps {
   animals: Animal[];
@@ -12,8 +13,9 @@ interface AnimalTableProps {
 
 const AnimalTable = ({ animals }: AnimalTableProps) => {
   const { hasPermission } = useAuthStore();
+  const { deleteAnimal } = useDataStore();
 
-  const getHealthStatusColor = (status: Animal["healthStatus"]) => {
+  const getHealthStatusColor = (status: Animal["status"]) => {
     switch (status) {
       case "healthy":
         return "text-green-600 bg-green-50";
@@ -78,141 +80,162 @@ const AnimalTable = ({ animals }: AnimalTableProps) => {
           </tr>
         </thead>
         <tbody className="bg-white divide-y divide-gray-200">
-          {animals.map((animal) => (
-            <tr key={animal.id} className="hover:bg-gray-50">
-              {/* Animal Info */}
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0 h-10 w-10">
-                    {animal.images && animal.images.length > 0 ? (
-                      <img
-                        className="h-10 w-10 rounded-full object-cover"
-                        src={animal.images[0]}
-                        alt={animal.name}
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
-                        <span className="text-sm font-medium text-gray-600">
-                          {animal.name.charAt(0)}
-                        </span>
+          {animals.map((animal) => {
+            const animalId = animal._id || animal.id;
+            const species =
+              typeof animal.speciesId === "object"
+                ? animal.speciesId?.commonName
+                : animal.species;
+            const imageUrl =
+              animal.imgUrl || (animal.images && animal.images[0]);
+            const age = animal.dob
+              ? new Date().getFullYear() - new Date(animal.dob).getFullYear()
+              : "Unknown";
+
+            return (
+              <tr key={animalId} className="hover:bg-gray-50">
+                {/* Animal Info */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0 h-10 w-10">
+                      {imageUrl ? (
+                        <img
+                          className="h-10 w-10 rounded-full object-cover"
+                          src={imageUrl}
+                          alt={animal.name}
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center">
+                          <span className="text-sm font-medium text-gray-600">
+                            {animal.name.charAt(0)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="ml-4">
+                      <div className="text-sm font-medium text-gray-900">
+                        {animal.name}
                       </div>
-                    )}
-                  </div>
-                  <div className="ml-4">
-                    <div className="text-sm font-medium text-gray-900">
-                      {animal.name}
-                    </div>
-                    <div className="text-sm text-gray-500">
-                      {animal.species} • {animal.gender} • {animal.age}y
+                      <div className="text-sm text-gray-500">
+                        {species} • {animal.sex} • {age}y
+                      </div>
                     </div>
                   </div>
-                </div>
-              </td>
+                </td>
 
-              {/* Category */}
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span
-                  className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(
-                    animal.category
-                  )}`}
-                >
-                  {animal.category}
-                </span>
-              </td>
-
-              {/* Health Status */}
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center">
-                  <Heart
-                    className={`h-4 w-4 mr-2 ${
-                      animal.healthStatus === "healthy"
-                        ? "text-green-500"
-                        : animal.healthStatus === "sick" ||
-                          animal.healthStatus === "injured"
-                        ? "text-red-500"
-                        : "text-yellow-500"
-                    }`}
-                  />
+                {/* Category */}
+                <td className="px-6 py-4 whitespace-nowrap">
                   <span
-                    className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getHealthStatusColor(
-                      animal.healthStatus
+                    className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getCategoryColor(
+                      animal.category
                     )}`}
                   >
-                    {animal.healthStatus}
+                    {animal.category}
                   </span>
-                </div>
-              </td>
+                </td>
 
-              {/* Location */}
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center text-sm text-gray-900">
-                  <MapPin className="h-4 w-4 mr-2 text-gray-400" />
-                  Enclosure {animal.enclosureId}
-                </div>
-              </td>
+                {/* Health Status */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center">
+                    <Heart
+                      className={`h-4 w-4 mr-2 ${
+                        animal.status === "healthy"
+                          ? "text-green-500"
+                          : animal.status === "sick" ||
+                            animal.status === "injured"
+                          ? "text-red-500"
+                          : "text-yellow-500"
+                      }`}
+                    />
+                    <span
+                      className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getHealthStatusColor(
+                        animal.status
+                      )}`}
+                    >
+                      {animal.status}
+                    </span>
+                  </div>
+                </td>
 
-              {/* Last Checkup */}
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="flex items-center text-sm text-gray-900">
-                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                  {animal.lastCheckup
-                    ? formatDistanceToNow(animal.lastCheckup, {
-                        addSuffix: true,
-                      })
-                    : "Never"}
-                </div>
-              </td>
+                {/* Location */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center text-sm text-gray-900">
+                    <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                    {typeof animal.enclosureId === "object"
+                      ? animal.enclosureId.name
+                      : `Enclosure ${animal.enclosureId}`}
+                  </div>
+                </td>
 
-              {/* Weight */}
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {animal.weight} kg
-              </td>
+                {/* Last Checkup */}
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="flex items-center text-sm text-gray-900">
+                    <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                    {animal.lastCheckup
+                      ? formatDistanceToNow(animal.lastCheckup, {
+                          addSuffix: true,
+                        })
+                      : "Never"}
+                  </div>
+                </td>
 
-              {/* Actions */}
-              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                <div className="flex items-center justify-end space-x-2">
-                  <Link
-                    href={`/dashboard/animals/${animal.id}`}
-                    className="text-blue-600 hover:text-blue-500 p-1 rounded-md hover:bg-blue-50 transition-colors"
-                    title="View Details"
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Link>
+                {/* Weight */}
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  N/A
+                </td>
 
-                  {hasPermission(["admin", "caretaker"]) && (
-                    <>
-                      <Link
-                        href={`/dashboard/animals/${animal.id}/edit`}
-                        className="text-gray-600 hover:text-gray-500 p-1 rounded-md hover:bg-gray-50 transition-colors"
-                        title="Edit Animal"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Link>
+                {/* Actions */}
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                  <div className="flex items-center justify-end space-x-2">
+                    <Link
+                      href={`/dashboard/animals/${animalId}`}
+                      className="text-blue-600 hover:text-blue-500 p-1 rounded-md hover:bg-blue-50 transition-colors"
+                      title="View Details"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Link>
 
-                      {hasPermission(["admin"]) && (
-                        <button
-                          className="text-red-600 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
-                          title="Delete Animal"
-                          onClick={() => {
-                            if (
-                              confirm(
-                                `Are you sure you want to delete ${animal.name}?`
-                              )
-                            ) {
-                              // Handle delete
-                              console.log("Delete animal:", animal.id);
-                            }
-                          }}
+                    {hasPermission(["admin", "caretaker"]) && (
+                      <>
+                        <Link
+                          href={`/dashboard/animals/${animalId}/edit`}
+                          className="text-gray-600 hover:text-gray-500 p-1 rounded-md hover:bg-gray-50 transition-colors"
+                          title="Edit Animal"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </td>
-            </tr>
-          ))}
+                          <Edit className="h-4 w-4" />
+                        </Link>
+
+                        {hasPermission(["admin"]) && (
+                          <button
+                            className="text-red-600 hover:text-red-500 p-1 rounded-md hover:bg-red-50 transition-colors"
+                            title="Delete Animal"
+                            onClick={async () => {
+                              if (
+                                confirm(
+                                  `Are you sure you want to delete ${animal.name}?`
+                                )
+                              ) {
+                                try {
+                                  await deleteAnimal(animalId);
+                                } catch (error) {
+                                  console.error(
+                                    "Failed to delete animal:",
+                                    error
+                                  );
+                                }
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
