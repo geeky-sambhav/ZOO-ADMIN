@@ -119,31 +119,47 @@ export interface MedicalRecordResponse {
 export type InventoryCategory = "food" | "medicine" | "supplies" | "equipment";
 
 export interface InventoryItem {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   category: InventoryCategory;
   quantity: number;
   unit: string;
-  minThreshold: number;
-  maxThreshold: number;
+  minThreshold?: number;
+  maxThreshold?: number;
   cost: number;
   supplier?: string;
   expiryDate?: Date;
   lastRestocked: Date;
+  createdAt?: Date;
+  updatedAt?: Date;
+  isExpired?: boolean;
 }
 
 // Enclosure Types
 export interface Enclosure {
-  id: string;
+  _id?: string;
+  id?: string;
   name: string;
   type: string;
   capacity: number;
-  currentOccupancy: number;
+  currentOccupancy?: number;
   location: string;
   temperature?: number;
   humidity?: number;
   lastCleaned?: Date;
-  caretakerId?: string;
+  caretakerId?: string | User;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface EnclosureResponse {
+  success: boolean;
+  message: string;
+  enclosure?: Enclosure;
+  enclosures?: Enclosure[];
+  count?: number;
+  error?: string;
 }
 
 // Feeding Schedule

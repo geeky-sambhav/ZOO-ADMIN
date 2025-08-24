@@ -18,6 +18,7 @@ import {
   Stethoscope,
   Calendar,
   Shield,
+  Building,
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -37,6 +38,12 @@ const Sidebar = () => {
       href: "/dashboard/animals",
       icon: Users,
       roles: ["admin", "doctor", "caretaker"],
+    },
+    {
+      name: "Enclosures",
+      href: "/dashboard/enclosures",
+      icon: Building,
+      roles: ["admin", "caretaker"],
     },
     {
       name: "Medical Records",

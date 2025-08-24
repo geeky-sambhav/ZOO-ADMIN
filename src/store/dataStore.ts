@@ -21,6 +21,10 @@ import medicalRecordService, {
 import notificationService, {
   NotificationFilters,
 } from "@/services/notificationService";
+import inventoryService, {
+  InventoryFilters,
+} from "@/services/inventoryService";
+import enclosureService from "@/services/enclosureService";
 
 interface DataState {
   // Animals
@@ -54,15 +58,36 @@ interface DataState {
 
   // Inventory
   inventory: InventoryItem[];
-  addInventoryItem: (item: Omit<InventoryItem, "id">) => void;
-  updateInventoryItem: (id: string, updates: Partial<InventoryItem>) => void;
-  deleteInventoryItem: (id: string) => void;
+  inventoryLoading: boolean;
+  inventoryError: string | null;
+  fetchInventoryItems: (filters?: InventoryFilters) => Promise<void>;
+  fetchInventoryItem: (id: string) => Promise<InventoryItem | null>;
+  addInventoryItem: (
+    item: Omit<InventoryItem, "_id" | "id" | "createdAt" | "updatedAt">
+  ) => Promise<void>;
+  updateInventoryItem: (
+    id: string,
+    updates: Partial<InventoryItem>
+  ) => Promise<void>;
+  deleteInventoryItem: (id: string) => Promise<void>;
+  restockInventoryItem: (id: string, quantity: number) => Promise<void>;
+  useInventoryItem: (id: string, quantity: number) => Promise<void>;
   getLowStockItems: () => InventoryItem[];
 
   // Enclosures
   enclosures: Enclosure[];
-  addEnclosure: (enclosure: Omit<Enclosure, "id">) => void;
-  updateEnclosure: (id: string, updates: Partial<Enclosure>) => void;
+  enclosuresLoading: boolean;
+  enclosuresError: string | null;
+  fetchEnclosures: () => Promise<void>;
+  fetchEnclosure: (id: string) => Promise<Enclosure | null>;
+  addEnclosure: (
+    enclosure: Omit<
+      Enclosure,
+      "_id" | "id" | "createdAt" | "updatedAt" | "currentOccupancy"
+    >
+  ) => Promise<void>;
+  updateEnclosure: (id: string, updates: Partial<Enclosure>) => Promise<void>;
+  deleteEnclosure: (id: string) => Promise<void>;
 
   // Feeding Schedules
   feedingSchedules: FeedingSchedule[];
@@ -112,87 +137,7 @@ interface DataState {
   getDashboardStats: () => DashboardStats;
 }
 
-// Mock data - removed as we'll use API data
-
-const mockInventory: InventoryItem[] = [
-  {
-    id: "1",
-    name: "Premium Cat Food",
-    category: "food",
-    quantity: 50,
-    unit: "kg",
-    minThreshold: 20,
-    maxThreshold: 100,
-    cost: 45.99,
-    supplier: "Zoo Supplies Inc",
-    expiryDate: new Date("2024-06-15"),
-    lastRestocked: new Date("2024-01-05"),
-  },
-  {
-    id: "2",
-    name: "Antibiotics",
-    category: "medicine",
-    quantity: 15,
-    unit: "bottles",
-    minThreshold: 10,
-    maxThreshold: 50,
-    cost: 120.0,
-    supplier: "VetMed Solutions",
-    expiryDate: new Date("2025-03-20"),
-    lastRestocked: new Date("2024-01-03"),
-  },
-  {
-    id: "3",
-    name: "Cleaning Supplies",
-    category: "supplies",
-    quantity: 8,
-    unit: "sets",
-    minThreshold: 15,
-    maxThreshold: 30,
-    cost: 25.5,
-    supplier: "CleanPro",
-    lastRestocked: new Date("2024-01-01"),
-  },
-];
-
-const mockEnclosures: Enclosure[] = [
-  {
-    id: "1",
-    name: "Lion Pride Habitat",
-    type: "Large Mammal",
-    capacity: 6,
-    currentOccupancy: 1,
-    location: "Section A",
-    temperature: 24,
-    humidity: 65,
-    lastCleaned: new Date("2024-01-13"),
-    caretakerId: "3",
-  },
-  {
-    id: "2",
-    name: "Tiger Territory",
-    type: "Large Mammal",
-    capacity: 2,
-    currentOccupancy: 1,
-    location: "Section B",
-    temperature: 22,
-    humidity: 70,
-    lastCleaned: new Date("2024-01-13"),
-    caretakerId: "3",
-  },
-  {
-    id: "3",
-    name: "Reptile House",
-    type: "Reptile",
-    capacity: 20,
-    currentOccupancy: 1,
-    location: "Section C",
-    temperature: 28,
-    humidity: 80,
-    lastCleaned: new Date("2024-01-12"),
-    caretakerId: "3",
-  },
-];
+// Mock data removed - now using API data
 
 export const useDataStore = create<DataState>((set, get) => ({
   // Animals
@@ -424,39 +369,267 @@ export const useDataStore = create<DataState>((set, get) => ({
   },
 
   // Inventory
-  inventory: mockInventory,
-  addInventoryItem: (item) => {
-    const newItem = { ...item, id: Date.now().toString() };
-    set((state) => ({ inventory: [...state.inventory, newItem] }));
+  inventory: [],
+  inventoryLoading: false,
+  inventoryError: null,
+
+  fetchInventoryItems: async (filters) => {
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      const response = await inventoryService.getAllInventoryItems(filters);
+      const inventory = response.inventoryItems || [];
+      set({ inventory, inventoryLoading: false });
+    } catch (error) {
+      set({
+        inventoryError:
+          error instanceof Error ? error.message : "Failed to fetch inventory",
+        inventoryLoading: false,
+      });
+    }
   },
-  updateInventoryItem: (id, updates) => {
-    set((state) => ({
-      inventory: state.inventory.map((item) =>
-        item.id === id ? { ...item, ...updates } : item
-      ),
-    }));
+
+  fetchInventoryItem: async (id) => {
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      const response = await inventoryService.getInventoryItem(id);
+      set({ inventoryLoading: false });
+      return response.inventoryItem || null;
+    } catch (error) {
+      set({
+        inventoryError:
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch inventory item",
+        inventoryLoading: false,
+      });
+      return null;
+    }
   },
-  deleteInventoryItem: (id) => {
-    set((state) => ({
-      inventory: state.inventory.filter((item) => item.id !== id),
-    }));
+
+  addInventoryItem: async (item) => {
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      const response = await inventoryService.addInventoryItem(item);
+      if (response.success && response.inventoryItem) {
+        set((state) => ({
+          inventory: [...state.inventory, response.inventoryItem!],
+          inventoryLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        inventoryError:
+          error instanceof Error
+            ? error.message
+            : "Failed to add inventory item",
+        inventoryLoading: false,
+      });
+      throw error;
+    }
   },
+
+  updateInventoryItem: async (id, updates) => {
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      const response = await inventoryService.updateInventoryItem(id, updates);
+      if (response.inventoryItem) {
+        set((state) => ({
+          inventory: state.inventory.map((item) =>
+            item._id === id || item.id === id ? response.inventoryItem! : item
+          ),
+          inventoryLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        inventoryError:
+          error instanceof Error
+            ? error.message
+            : "Failed to update inventory item",
+        inventoryLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  deleteInventoryItem: async (id) => {
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      await inventoryService.deleteInventoryItem(id);
+      set((state) => ({
+        inventory: state.inventory.filter(
+          (item) => item._id !== id && item.id !== id
+        ),
+        inventoryLoading: false,
+      }));
+    } catch (error) {
+      set({
+        inventoryError:
+          error instanceof Error
+            ? error.message
+            : "Failed to delete inventory item",
+        inventoryLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  restockInventoryItem: async (id, quantity) => {
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      const response = await inventoryService.restockInventoryItem(
+        id,
+        quantity
+      );
+      if (response.inventoryItem) {
+        set((state) => ({
+          inventory: state.inventory.map((item) =>
+            item._id === id || item.id === id ? response.inventoryItem! : item
+          ),
+          inventoryLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        inventoryError:
+          error instanceof Error
+            ? error.message
+            : "Failed to restock inventory item",
+        inventoryLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  useInventoryItem: async (id, quantity) => {
+    set({ inventoryLoading: true, inventoryError: null });
+    try {
+      const response = await inventoryService.useInventoryItem(id, quantity);
+      if (response.inventoryItem) {
+        set((state) => ({
+          inventory: state.inventory.map((item) =>
+            item._id === id || item.id === id ? response.inventoryItem! : item
+          ),
+          inventoryLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        inventoryError:
+          error instanceof Error
+            ? error.message
+            : "Failed to use inventory item",
+        inventoryLoading: false,
+      });
+      throw error;
+    }
+  },
+
   getLowStockItems: () => {
-    return get().inventory.filter((item) => item.quantity <= item.minThreshold);
+    return get().inventory.filter((item) => {
+      const minThreshold = item.minThreshold || 10;
+      return item.quantity <= minThreshold;
+    });
   },
 
   // Enclosures
-  enclosures: mockEnclosures,
-  addEnclosure: (enclosure) => {
-    const newEnclosure = { ...enclosure, id: Date.now().toString() };
-    set((state) => ({ enclosures: [...state.enclosures, newEnclosure] }));
+  enclosures: [],
+  enclosuresLoading: false,
+  enclosuresError: null,
+
+  fetchEnclosures: async () => {
+    set({ enclosuresLoading: true, enclosuresError: null });
+    try {
+      const response = await enclosureService.getAllEnclosures();
+      const enclosures = response.enclosures || [];
+      set({ enclosures, enclosuresLoading: false });
+    } catch (error) {
+      set({
+        enclosuresError:
+          error instanceof Error ? error.message : "Failed to fetch enclosures",
+        enclosuresLoading: false,
+      });
+    }
   },
-  updateEnclosure: (id, updates) => {
-    set((state) => ({
-      enclosures: state.enclosures.map((enclosure) =>
-        enclosure.id === id ? { ...enclosure, ...updates } : enclosure
-      ),
-    }));
+
+  fetchEnclosure: async (id) => {
+    set({ enclosuresLoading: true, enclosuresError: null });
+    try {
+      const response = await enclosureService.getEnclosure(id);
+      set({ enclosuresLoading: false });
+      return response.enclosure || null;
+    } catch (error) {
+      set({
+        enclosuresError:
+          error instanceof Error ? error.message : "Failed to fetch enclosure",
+        enclosuresLoading: false,
+      });
+      return null;
+    }
+  },
+
+  addEnclosure: async (enclosure) => {
+    set({ enclosuresLoading: true, enclosuresError: null });
+    try {
+      const response = await enclosureService.addEnclosure(enclosure);
+      if (response.success && response.enclosure) {
+        set((state) => ({
+          enclosures: [...state.enclosures, response.enclosure!],
+          enclosuresLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        enclosuresError:
+          error instanceof Error ? error.message : "Failed to add enclosure",
+        enclosuresLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  updateEnclosure: async (id, updates) => {
+    set({ enclosuresLoading: true, enclosuresError: null });
+    try {
+      const response = await enclosureService.updateEnclosure(id, updates);
+      if (response.enclosure) {
+        set((state) => ({
+          enclosures: state.enclosures.map((enclosure) =>
+            enclosure._id === id || enclosure.id === id
+              ? response.enclosure!
+              : enclosure
+          ),
+          enclosuresLoading: false,
+        }));
+      }
+    } catch (error) {
+      set({
+        enclosuresError:
+          error instanceof Error ? error.message : "Failed to update enclosure",
+        enclosuresLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  deleteEnclosure: async (id) => {
+    set({ enclosuresLoading: true, enclosuresError: null });
+    try {
+      await enclosureService.deleteEnclosure(id);
+      set((state) => ({
+        enclosures: state.enclosures.filter(
+          (enclosure) => enclosure._id !== id && enclosure.id !== id
+        ),
+        enclosuresLoading: false,
+      }));
+    } catch (error) {
+      set({
+        enclosuresError:
+          error instanceof Error ? error.message : "Failed to delete enclosure",
+        enclosuresLoading: false,
+      });
+      throw error;
+    }
   },
 
   // Feeding Schedules

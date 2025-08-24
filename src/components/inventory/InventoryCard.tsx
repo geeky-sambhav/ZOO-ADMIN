@@ -33,7 +33,10 @@ const InventoryCard = ({ item }: InventoryCardProps) => {
   };
 
   const getStockStatus = () => {
-    if (item.quantity <= item.minThreshold) {
+    const minThreshold = item.minThreshold || 10;
+    const maxThreshold = item.maxThreshold || 100;
+
+    if (item.quantity <= minThreshold) {
       return {
         status: "low",
         color: "text-red-600 bg-red-50 border-red-200",
@@ -41,7 +44,7 @@ const InventoryCard = ({ item }: InventoryCardProps) => {
         label: "Low Stock",
       };
     }
-    if (item.quantity > item.maxThreshold) {
+    if (item.quantity > maxThreshold) {
       return {
         status: "overstocked",
         color: "text-orange-600 bg-orange-50 border-orange-200",
@@ -59,15 +62,17 @@ const InventoryCard = ({ item }: InventoryCardProps) => {
 
   const stockStatus = getStockStatus();
   const stockPercentage = Math.min(
-    (item.quantity / item.maxThreshold) * 100,
+    (item.quantity / (item.maxThreshold || 100)) * 100,
     100
   );
   const isExpiringSoon =
     item.expiryDate &&
     item.expiryDate.getTime() - new Date().getTime() < 30 * 24 * 60 * 60 * 1000; // 30 days
 
+  const itemId = item._id || item.id;
+
   return (
-    <Link href={`/dashboard/inventory/${item.id}`}>
+    <Link href={`/dashboard/inventory/${itemId}`}>
       <div className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-lg transition-all duration-200 hover:border-blue-300 group">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
