@@ -125,22 +125,7 @@ const DashboardStats = ({ stats, userRole }: DashboardStatsProps) => {
               <div>
                 <p className="text-sm font-medium text-gray-600">{stat.name}</p>
                 <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                <div className="flex items-center mt-2">
-                  <span
-                    className={`text-sm font-medium ${
-                      stat.changeType === "positive"
-                        ? "text-green-600"
-                        : stat.changeType === "negative"
-                        ? "text-red-600"
-                        : "text-gray-600"
-                    }`}
-                  >
-                    {stat.change}
-                  </span>
-                  <span className="text-sm text-gray-500 ml-1">
-                    from last week
-                  </span>
-                </div>
+              
               </div>
               <div className={`${stat.bgColor} p-3 rounded-lg`}>
                 <Icon className={`h-6 w-6 ${stat.color}`} />

@@ -84,6 +84,7 @@ class AnimalService {
   ): Promise<AnimalResponse> {
     const response = await this.makeRequest<{
       message: string;
+      success: boolean;
       animal: Animal;
     }>(`/api/animals/${id}`, {
       method: "PUT",
@@ -92,7 +93,7 @@ class AnimalService {
 
     return {
       message: response.message,
-      success: true,
+      success: response.success,
       animal: response.animal,
     };
   }

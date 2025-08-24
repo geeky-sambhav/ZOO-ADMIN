@@ -219,42 +219,8 @@ export default function EnclosuresPage() {
             </div>
           </div>
 
-          {/* View Toggle */}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`inline-flex items-center px-3 py-2 border border-gray-300 rounded-md text-sm font-medium ${
-                showFilters
-                  ? "bg-gray-100 text-gray-900"
-                  : "bg-white text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              <Filter className="h-4 w-4 mr-2" />
-              Filters
-            </button>
-            <div className="flex border border-gray-300 rounded-md">
-              <button
-                onClick={() => setViewMode("grid")}
-                className={`px-3 py-2 text-sm font-medium ${
-                  viewMode === "grid"
-                    ? "bg-blue-50 text-blue-600 border-blue-200"
-                    : "text-gray-700 hover:text-gray-900"
-                }`}
-              >
-                <Grid className="h-4 w-4" />
-              </button>
-              <button
-                onClick={() => setViewMode("table")}
-                className={`px-3 py-2 text-sm font-medium border-l ${
-                  viewMode === "table"
-                    ? "bg-blue-50 text-blue-600 border-blue-200"
-                    : "text-gray-700 hover:text-gray-900 border-gray-300"
-                }`}
-              >
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+       
+        
         </div>
 
         {/* Filters */}

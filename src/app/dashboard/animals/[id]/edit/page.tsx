@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useDataStore } from "@/store/dataStore";
 import { useAuthStore } from "@/store/authStore";
-import { AnimalCategory, Enclosure, Species, User } from "@/types";
+import { Animal, Enclosure, Species, User } from "@/types";
 import { ArrowLeft, Upload, X, Loader } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
@@ -14,24 +14,26 @@ import imageService from "@/services/imageService";
 import speciesService from "@/services/speciesService";
 import userService from "@/services/userService";
 
-export default function NewAnimalPage() {
+export default function EditAnimalPage() {
+  const params = useParams();
   const router = useRouter();
-  const { addAnimal } = useDataStore();
+  const { updateAnimal } = useDataStore();
   const { hasPermission } = useAuthStore();
 
+  const animalId = params.id as string;
+
+  const [animal, setAnimal] = useState<Animal | null>(null);
   const [enclosures, setEnclosures] = useState<Enclosure[]>([]);
   const [enclosuresLoading, setEnclosuresLoading] = useState(true);
   const [species, setSpecies] = useState<Species[]>([]);
   const [speciesLoading, setSpeciesLoading] = useState(true);
   const [caretakers, setCaretakers] = useState<User[]>([]);
   const [caretakersLoading, setCaretakersLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     name: "",
     speciesId: "",
     caretakerId: "",
-    category: "mammals" as AnimalCategory,
-    age: 0,
-    weight: 0,
     sex: "Unknown" as "Male" | "Female" | "Unknown",
     status: "Healthy" as "Healthy" | "Sick" | "Deceased",
     enclosureId: "",
@@ -45,9 +47,62 @@ export default function NewAnimalPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
 
-  // Fetch enclosures, species, and caretakers on component mount
+  // Check permission
+  const hasAccess = hasPermission(["admin", "caretaker"]);
+
+  // Fetch animal, enclosures and species on component mount
   useEffect(() => {
+    if (!hasAccess) {
+      router.push("/dashboard/animals");
+      return;
+    }
     const fetchData = async () => {
+      try {
+        setLoading(true);
+
+        // Fetch animal data
+        const animalResponse = await animalService.getAnimal(animalId);
+        if (animalResponse.success && animalResponse.animal) {
+          const animalData = animalResponse.animal;
+          setAnimal(animalData);
+
+          // Populate form with animal data
+          setFormData({
+            name: animalData.name || "",
+            speciesId:
+              typeof animalData.speciesId === "object"
+                ? animalData.speciesId._id
+                : animalData.speciesId || "",
+            caretakerId:
+              typeof animalData.caretakerId === "object"
+                ? animalData.caretakerId.id || ""
+                : animalData.caretakerId || "",
+            sex: animalData.sex || "Unknown",
+            status: animalData.status || "Healthy",
+            enclosureId:
+              typeof animalData.enclosureId === "object"
+                ? animalData.enclosureId._id || animalData.enclosureId.id || ""
+                : animalData.enclosureId || "",
+            info: animalData.info || animalData.description || "",
+            imgUrl: animalData.imgUrl || "",
+            dob: animalData.dob
+              ? new Date(animalData.dob).toISOString().split("T")[0]
+              : "",
+            arrivalDate: animalData.arrivalDate
+              ? new Date(animalData.arrivalDate).toISOString().split("T")[0]
+              : "",
+          });
+        }
+      } catch (error) {
+        console.error("Error fetching animal:", error);
+        setErrors((prev) => ({
+          ...prev,
+          animal: "Failed to load animal data",
+        }));
+      } finally {
+        setLoading(false);
+      }
+
       try {
         // Fetch enclosures
         setEnclosuresLoading(true);
@@ -86,6 +141,7 @@ export default function NewAnimalPage() {
         // Fetch caretakers
         setCaretakersLoading(true);
         const caretakersResponse = await userService.getCaretakers();
+        console.log("caretakersResponse", caretakersResponse);
         if (caretakersResponse.success && caretakersResponse.caretakers) {
           setCaretakers(caretakersResponse.caretakers);
         }
@@ -100,23 +156,11 @@ export default function NewAnimalPage() {
       }
     };
 
-    fetchData();
-  }, []);
+    if (animalId) {
+      fetchData();
+    }
+  }, [animalId, hasAccess, router]);
 
-  // Redirect if user doesn't have permission
-  if (!hasPermission(["admin", "caretaker"])) {
-    router.push("/dashboard/animals");
-    return null;
-  }
-
-  const categories: AnimalCategory[] = [
-    "mammals",
-    "reptiles",
-    "birds",
-    "amphibians",
-    "fish",
-    "insects",
-  ];
   const sexOptions = ["Male", "Female", "Unknown"] as const;
   const statusOptions = ["Healthy", "Sick", "Deceased"] as const;
 
@@ -143,60 +187,8 @@ export default function NewAnimalPage() {
       newErrors.imgUrl = "Image URL is required";
     }
 
-    if (formData.age < 0) newErrors.age = "Age must be positive";
-    if (formData.weight <= 0) newErrors.weight = "Weight must be positive";
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!validateForm()) return;
-
-    setIsSubmitting(true);
-
-    try {
-      // Prepare animal data for API
-      const animalData = {
-        name: formData.name,
-        caretakerId: formData.caretakerId,
-        speciesId: formData.speciesId,
-        enclosureId: formData.enclosureId,
-        dob: formData.dob
-          ? new Date(formData.dob)
-          : new Date(Date.now() - formData.age * 365.25 * 24 * 60 * 60 * 1000), // Use provided DOB or calculate from age
-        sex: formData.sex,
-        arrivalDate: formData.arrivalDate
-          ? new Date(formData.arrivalDate)
-          : new Date(),
-        status: formData.status,
-        info: formData.info,
-        imgUrl: formData.imgUrl,
-      };
-
-      // Add animal via API
-      const response = await animalService.addAnimal(animalData);
-
-      if (response.success && response.animal) {
-        // Update the data store
-        await addAnimal(response.animal);
-        // Redirect to animals list
-        router.push("/dashboard/animals");
-      } else {
-        setErrors({ submit: response.message || "Failed to add animal" });
-      }
-    } catch (error) {
-      console.error("Error adding animal:", error);
-      const errorMessage =
-        error instanceof Error
-          ? error.message
-          : "Failed to add animal. Please try again.";
-      setErrors({ submit: errorMessage });
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
   const handleInputChange = (
@@ -204,73 +196,157 @@ export default function NewAnimalPage() {
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >
   ) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "number" ? parseFloat(value) || 0 : value,
+      [name]: value,
     }));
 
     // Clear error when user starts typing
     if (errors[name]) {
-      setErrors((prev) => ({ ...prev, [name]: "" }));
+      setErrors((prev) => ({
+        ...prev,
+        [name]: "",
+      }));
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setUploadingImages(true);
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
 
     try {
-      const result = await imageService.uploadImage(file);
-
-      if (result.success && result.data) {
+      setUploadingImages(true);
+      const response = await imageService.uploadImage(files[0]);
+      if (response.success && response.data?.url) {
         setFormData((prev) => ({
           ...prev,
-          imgUrl: result.data!.url,
+          imgUrl: response.data!.url,
         }));
-
-        // Clear any previous image errors
-        if (errors.images) {
-          setErrors((prev) => {
-            const newErrors = { ...prev };
-            delete newErrors.images;
-            return newErrors;
-          });
-        }
-      } else {
+        // Clear any existing image errors
         setErrors((prev) => ({
           ...prev,
-          images: result.message || "Failed to upload image",
+          imgUrl: "",
         }));
       }
     } catch (error) {
       console.error("Error uploading image:", error);
       setErrors((prev) => ({
         ...prev,
-        images: "Failed to upload image. Please try again.",
+        imgUrl: "Failed to upload image",
       }));
     } finally {
       setUploadingImages(false);
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!validateForm()) {
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      // Prepare data for API according to the edit animal API expectations
+      const animalData = {
+        name: formData.name,
+        caretakerId: formData.caretakerId,
+        speciesId: formData.speciesId,
+        enclosureId: formData.enclosureId,
+        dob: formData.dob ? new Date(formData.dob) : animal?.dob,
+        sex: formData.sex,
+        arrivalDate: formData.arrivalDate
+          ? new Date(formData.arrivalDate)
+          : animal?.arrivalDate || new Date(),
+        status: formData.status,
+        info: formData.info,
+        imgUrl: formData.imgUrl,
+      };
+
+      const response = await animalService.updateAnimal(animalId, animalData);
+
+      if (response.success && response.animal) {
+        // Update the data store
+        await updateAnimal(animalId, animalData);
+        // Redirect to animal detail page
+        router.push(`/dashboard/animals/${animalId}`);
+      } else {
+        setErrors({ submit: response.message || "Failed to update animal" });
+      }
+    } catch (error) {
+      console.error("Error updating animal:", error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to update animal. Please try again.";
+      setErrors({ submit: errorMessage });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link
+            href={`/dashboard/animals/${animalId}`}
+            className="inline-flex items-center text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Animal
+          </Link>
+        </div>
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!animal) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/dashboard/animals"
+            className="inline-flex items-center text-gray-600 hover:text-gray-900"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Animals
+          </Link>
+        </div>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <p className="text-red-800">Animal not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAccess) {
+    return null;
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link
-          href="/dashboard/animals"
+          href={`/dashboard/animals/${animalId}`}
           className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors"
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Animals
+          Back to Animal
         </Link>
         <div className="border-l border-gray-300 pl-4">
-          <h1 className="text-2xl font-bold text-gray-900">Add New Animal</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Edit Animal</h1>
           <p className="text-gray-600">
-            Register a new animal in the zoo management system
+            Update {animal.name}&apos;s information
           </p>
         </div>
       </div>
@@ -424,71 +500,6 @@ export default function NewAnimalPage() {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              {/* Category - PRESERVED FIELD */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Category
-                </label>
-                <select
-                  name="category"
-                  value={formData.category}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Age - PRESERVED FIELD */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Age (years) *
-                </label>
-                <input
-                  type="number"
-                  name="age"
-                  value={formData.age}
-                  onChange={handleInputChange}
-                  min="0"
-                  step="0.1"
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.age
-                      ? "border-red-300 focus:ring-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {errors.age && (
-                  <p className="mt-1 text-sm text-red-600">{errors.age}</p>
-                )}
-              </div>
-
-              {/* Weight - PRESERVED FIELD */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Weight (kg) *
-                </label>
-                <input
-                  type="number"
-                  name="weight"
-                  value={formData.weight}
-                  onChange={handleInputChange}
-                  min="0.1"
-                  step="0.1"
-                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    errors.weight
-                      ? "border-red-300 focus:ring-red-500"
-                      : "border-gray-300"
-                  }`}
-                />
-                {errors.weight && (
-                  <p className="mt-1 text-sm text-red-600">{errors.weight}</p>
-                )}
               </div>
 
               {/* Date of Birth */}
@@ -666,7 +677,7 @@ export default function NewAnimalPage() {
         {/* Submit Buttons */}
         <div className="flex justify-end gap-4">
           <Link
-            href="/dashboard/animals"
+            href={`/dashboard/animals/${animalId}`}
             className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancel
@@ -676,7 +687,7 @@ export default function NewAnimalPage() {
             disabled={isSubmitting || uploadingImages}
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {isSubmitting ? "Adding..." : "Add Animal"}
+            {isSubmitting ? "Updating..." : "Update Animal"}
           </button>
         </div>
       </form>
