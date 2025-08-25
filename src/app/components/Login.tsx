@@ -93,6 +93,7 @@ const Login = () => {
           </p>
           <div className="mt-4 text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
             <p className="font-semibold mb-1">Demo Accounts:</p>
+            <p>mail:admin@zoo.com password:123</p>
           </div>
         </div>
 
